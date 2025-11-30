@@ -709,10 +709,317 @@ function showBigPic() {
     unzoom.call(this);
 }
 
-//导出 flamegraph.vue 所需
+/**
+ * @component: views/common/profiler/flamegraph.vue
+ * @vue-data: methods
+ * @descript: 保存火焰图为 SVG 文件（修复缩放问题）
+ */
+function saveFlamegraphOld() {
+    const svgElement = this.$refs.svg;
+    
+    // 克隆 SVG 元素并添加完整的数据属性
+    const clonedSvg = svgElement.cloneNode(true);
+    
+    // 为所有节点添加完整的数据属性
+    const nodes = clonedSvg.querySelectorAll('.func_g');
+    nodes.forEach((node, index) => {
+        const originalNode = this.data.nodes[index];
+        if (originalNode) {
+            // 添加完整的数据属性
+            node.setAttribute('data-original-x', originalNode.rect_x);
+            node.setAttribute('data-original-width', originalNode.rect_w);
+            node.setAttribute('data-original-height', originalNode.rect_h);
+            node.setAttribute('data-original-fill', originalNode.rect_fill);
+        }
+    });
+    
+    // 添加完整的缩放状态管理
+    const enhancedScript = `
+    <script>
+    <![CDATA[
+    (function() {
+        let currentZoom = null;
+        let zoomStack = [];
+        let originalStates = new Map();
+        
+        // 初始化保存原始状态
+        function initializeOriginalStates() {
+            const nodes = document.querySelectorAll('.func_g');
+            nodes.forEach(node => {
+                const rect = node.querySelector('rect');
+                const text = node.querySelector('text');
+                if (rect && text) {
+                    originalStates.set(node, {
+                        rect: {
+                            x: rect.getAttribute('x'),
+                            width: rect.getAttribute('width'),
+                            display: rect.style.display || 'block',
+                            opacity: rect.style.opacity || '1'
+                        },
+                        text: {
+                            x: text.getAttribute('x'),
+                            content: text.textContent,
+                            display: text.style.display || 'block',
+                            opacity: text.style.opacity || '1'
+                        },
+                        node: {
+                            display: node.style.display || 'block',
+                            opacity: node.style.opacity || '1'
+                        }
+                    });
+                }
+            });
+        }
+        
+        // 增强的缩放函数
+        function enhancedZoom(event) {
+            event.stopPropagation();
+            const node = event.currentTarget;
+            const rect = node.querySelector('rect');
+            if (!rect) return;
+            
+            const svg = document.querySelector('svg');
+            const nodeX = parseFloat(rect.getAttribute('x'));
+            const nodeWidth = parseFloat(rect.getAttribute('width'));
+            const nodeY = parseFloat(rect.getAttribute('y'));
+            
+            // 计算缩放比例
+            const ratio = (svg.width.baseVal.value - 20) / nodeWidth;
+            
+            // 保存当前缩放状态
+            zoomStack.push({
+                node: node,
+                x: nodeX,
+                width: nodeWidth,
+                ratio: ratio
+            });
+            
+            // 更新重置按钮
+            const unzoomBtn = document.getElementById('unzoom-btn');
+            if (unzoomBtn) unzoomBtn.style.opacity = "1.0";
+            
+            // 处理所有节点
+            const allNodes = document.querySelectorAll('.func_g');
+            allNodes.forEach(currentNode => {
+                const currentRect = currentNode.querySelector('rect');
+                if (!currentRect) return;
+                
+                const currentX = parseFloat(currentRect.getAttribute('x'));
+                const currentWidth = parseFloat(currentRect.getAttribute('width'));
+                const currentY = parseFloat(currentRect.getAttribute('y'));
+                
+                // 判断节点位置关系
+                const isUpstack = currentY < nodeY; // 上层节点
+                const isInRange = currentX >= nodeX && (currentX + currentWidth) <= (nodeX + nodeWidth);
+                
+                if (isUpstack) {
+                    // 上层节点：半透明显示包含当前区域的父节点
+                    if (currentX <= nodeX && (currentX + currentWidth) >= (nodeX + nodeWidth)) {
+                        currentNode.style.opacity = "0.5";
+                        currentNode.style.display = "block";
+                    } else {
+                        currentNode.style.display = "none";
+                    }
+                } else {
+                    // 当前层及下层节点
+                    if (currentX < nodeX || (currentX + currentWidth) > (nodeX + nodeWidth)) {
+                        currentNode.style.display = "none";
+                    } else {
+                        // 缩放子节点
+                        const newX = 10 + (currentX - nodeX) * ratio;
+                        const newWidth = currentWidth * ratio;
+                        
+                        currentRect.setAttribute('x', newX);
+                        currentRect.setAttribute('width', newWidth);
+                        
+                        const text = currentNode.querySelector('text');
+                        if (text) {
+                            text.setAttribute('x', newX + 3);
+                            updateTextVisibility(currentNode);
+                        }
+                        
+                        currentNode.style.display = "block";
+                        currentNode.style.opacity = "1";
+                    }
+                }
+            });
+            
+            currentZoom = node;
+        }
+        
+        // 更新文本可见性
+        function updateTextVisibility(node) {
+            const rect = node.querySelector('rect');
+            const text = node.querySelector('text');
+            if (!rect || !text) return;
+            
+            const width = parseFloat(rect.getAttribute('width'));
+            const originalText = node.querySelector('title').textContent.split(' (')[0];
+            
+            if (width < 24) {
+                text.textContent = "";
+                return;
+            }
+            
+            text.textContent = originalText;
+            // 简单的文本截断逻辑
+            if (text.getComputedTextLength() > width - 6) {
+                for (let i = originalText.length - 2; i > 0; i--) {
+                    const truncated = originalText.substring(0, i) + "..";
+                    text.textContent = truncated;
+                    if (text.getComputedTextLength() <= width - 6) {
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 重置缩放
+        function enhancedUnzoom() {
+            const unzoomBtn = document.getElementById('unzoom-btn');
+            if (unzoomBtn) unzoomBtn.style.opacity = "0.0";
+            
+            const allNodes = document.querySelectorAll('.func_g');
+            allNodes.forEach(node => {
+                node.style.display = "block";
+                node.style.opacity = "1";
+                
+                // 恢复原始属性
+                const originalState = originalStates.get(node);
+                if (originalState) {
+                    const rect = node.querySelector('rect');
+                    const text = node.querySelector('text');
+                    
+                    if (rect) {
+                        rect.setAttribute('x', originalState.rect.x);
+                        rect.setAttribute('width', originalState.rect.width);
+                    }
+                    
+                    if (text) {
+                        text.setAttribute('x', originalState.text.x);
+                        text.textContent = originalState.text.content;
+                    }
+                }
+            });
+            
+            zoomStack = [];
+            currentZoom = null;
+        }
+        
+        // 初始化事件监听
+        function initializeEvents() {
+            initializeOriginalStates();
+            
+            const nodes = document.querySelectorAll('.func_g');
+            nodes.forEach(node => {
+                node.addEventListener('click', enhancedZoom);
+            });
+            
+            const unzoomBtn = document.getElementById('unzoom-btn');
+            if (unzoomBtn) {
+                unzoomBtn.addEventListener('click', enhancedUnzoom);
+            }
+        }
+        
+        // DOM 加载完成后初始化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeEvents);
+        } else {
+            initializeEvents();
+        }
+    })();
+    ]]>
+    <\/script>
+    `;
+    
+    const serializer = new XMLSerializer();
+    let source = serializer.serializeToString(clonedSvg);
+    
+    // 添加命名空间
+    if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    if (!source.match(/^<svg[^>]+"http\:\/\/www\.w3\.org\/1999\/xlink"/)) {
+        source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+    }
+    
+    // 插入增强的脚本
+    const defsEnd = source.indexOf('</defs>');
+    if (defsEnd !== -1) {
+        source = source.slice(0, defsEnd + 7) + enhancedScript + source.slice(defsEnd + 7);
+    }
+    
+    // 修改按钮ID
+    source = source.replace(/ref="unzoom"/g, 'id="unzoom-btn"');
+    
+    // 创建下载
+    const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    const downloadLink = document.createElement('a');
+    downloadLink.href = url;
+    downloadLink.download = `flamegraph-${timestamp}.svg`;
+    
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    
+    URL.revokeObjectURL(url);
+}
+
+function saveFlamegraph() {
+    const svgElement = this.$refs.svg;
+    const serializer = new XMLSerializer();
+    let source = serializer.serializeToString(svgElement);
+    
+    // 添加命名空间
+    if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    
+    // 添加警告注释
+    const warningComment = `<!-- 
+注意：此SVG文件为静态版本，缩放功能可能无法正常工作。
+建议在原始应用程序中查看完整的交互功能。
+-->`;
+    
+    source = source.replace(/<svg[^>]*>/, '$&' + warningComment);
+    
+    // 创建下载
+    const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    const downloadLink = document.createElement('a');
+    downloadLink.href = url;
+    downloadLink.download = `flamegraph-static-${timestamp}.svg`;
+    
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    
+    URL.revokeObjectURL(url);
+}
+
+// 添加保存按钮的鼠标悬停效果
+function saveover() {
+    this.$refs.save.style["opacity"] = "1.0";
+}
+
+function saveout() {
+    this.$refs.save.style["opacity"] = "0.1";
+}
+
+// 修改导出对象，添加新方法
 export default {
     mounted,
-    methods: { s, c, zoom, unzoom, searchover, searchout, search_prompt, set_parent_inf },
+    methods: { 
+        s, c, zoom, unzoom, 
+        searchover, searchout, search_prompt, 
+        set_parent_inf,
+        saveFlamegraph, saveover, saveout  // 新增的方法
+    },
     computed: { nodes },
     watch: { showBigPic }
 }

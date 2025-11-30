@@ -1,3 +1,12 @@
+<!--
+ * @Author: 你的名字
+ * @Date: 2025-11-30 16:22:03
+ * @LastEditors: 你的名字
+ * @LastEditTime: 2025-11-30 16:31:04
+ * @FilePath: \swt\vue\src\views\flamegraph\flamegraph.vue
+ * @Description: 
+ * @customString: Copyright (c) 2024 by 你的公司/项目名, All Rights Reserved. 
+-->
 <template>
 <svg class="flamegraph-view" ref="svg" version="1.1" id="flamegraph-svg"
   data-width="100%" width="100%"
@@ -16,6 +25,7 @@
 <text text-anchor="" :x="data.xpad" y="21" :font-size="data.fontsize" :font-family="data.fonttype" fill="rgb(0,0,0)" ref="unzoom" v-on:click.stop="unzoom()" style="opacity:0.0;cursor:pointer" >Reset Zoom</text>
 <text text-anchor="" :x="data.xpad3" y="21" :font-size="data.fontsize" :font-family="data.fonttype" fill="rgb(0,0,0)" ref="enlarge" v-on:mouseover="zoomover()" v-on:mouseout="zoomout()" v-on:click.stop="set_parent_inf" style="opacity:0.1;cursor:pointer">{{ enlarge }}</text>
 <text text-anchor="" :x="data.xpad2" y="21" :font-size="data.fontsize" :font-family="data.fonttype" fill="rgb(0,0,0)" ref="search" v-on:mouseover="searchover()" v-on:mouseout="searchout()" v-on:click.stop="search_prompt()" style="opacity:0.1;cursor:pointer" >Search</text>
+<text text-anchor="" :x="data.xpad2 + 70" y="21" :font-size="data.fontsize" :font-family="data.fonttype" fill="rgb(0,0,0)" ref="save" v-on:mouseover="saveover()" v-on:mouseout="saveout()" v-on:click.stop="saveFlamegraph()" style="opacity:0.1;cursor:pointer" >Save</text>
 <text text-anchor="" :x="data.xpad2" :y="data.detailsY" :font-size="data.fontsize" :font-family="data.fonttype" fill="rgb(0,0,0)" ref="matched" >{{ matchedtxt }}</text>
 
 <g v-for="node in nodes" :node-index="node.index" class="func_g" v-on:mouseover="s(`${node.name} ${node.samples}`)" v-on:mouseout="c()" v-on:click.stop="zoom($event)" :data-search="node.search" :data-funcname="node.func">
@@ -53,7 +63,10 @@ export default {
         search_prompt() { jsflamegraph.methods.search_prompt.call(this); },
         set_parent_inf() { jsflamegraph.methods.set_parent_inf.call(this); },
         zoomover() { this.$refs.enlarge.style["opacity"] = "1.0"; },
-        zoomout() { this.$refs.enlarge.style["opacity"] = "0.1"; }
+        zoomout() { this.$refs.enlarge.style["opacity"] = "0.1"; },
+        saveFlamegraph() { jsflamegraph.methods.saveFlamegraph.call(this); },
+        saveover() { jsflamegraph.methods.saveover.call(this); },
+        saveout() { jsflamegraph.methods.saveout.call(this); }
     },
 
     computed: {

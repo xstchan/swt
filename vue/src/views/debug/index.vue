@@ -1,85 +1,61 @@
 <template>
   <div class="app-container">
     <el-row style="padding-top: 15px; padding-bottom: 15px; border-bottom: 1px solid white;">
-      <NodeFilter
-        ref="nodeFilter"
-        @selectNodeServiceChange="onSelectNodeServiceChange"
-      />
+      <NodeFilter ref="nodeFilter" @selectNodeServiceChange="onSelectNodeServiceChange" />
     </el-row>
 
     <el-row style="padding-top: 15px;padding-bottom: 15px;border-bottom: 1px solid white;">
-      <el-table
-        :data="nodeServices.slice((currpage-1)*pagesize, currpage*pagesize)"
-        stripe
-        style="width: 100%"
-      >
-        <el-table-column
-          label="类型"
-          width="100px">
+      <el-table :data="nodeServices.slice((currpage - 1) * pagesize, currpage * pagesize)" stripe
+        class="adaptive-table">
+        <el-table-column label="类型" min-width="100px">
           <template slot-scope="scope">
             {{ scope.row.base.node.type }}
           </template>
         </el-table-column>
 
-        <el-table-column
-          label="节点"
-          width="100px">
+        <el-table-column label="节点" min-width="100px">
           <template slot-scope="scope">
             {{ scope.row.base.node.name }}
           </template>
         </el-table-column>
 
-        <el-table-column
-          label="地址"
-          width="100px">
+        <el-table-column label="地址" min-width="200px">
           <template slot-scope="scope">
             {{ scope.row.base.node.addr }}
           </template>
         </el-table-column>
 
-        <el-table-column
-          label="服务地址"
-          width="100px">
+        <el-table-column label="服务地址" min-width="200px">
           <template slot-scope="scope">
             {{ scope.row.base.addr }}
           </template>
         </el-table-column>
 
-        <el-table-column
-          label="服务名"
-          width="150px">
+        <el-table-column label="服务名" min-width="300px">
           <template slot-scope="scope">
             {{ scope.row.base.name }}
           </template>
         </el-table-column>
 
-        <el-table-column
-          label="结果"
-          height="600px"
-          width="750px">
+        <el-table-column label="结果" height="600px" min-width="750px">
           <template slot-scope="scope">
-            <el-input type="textarea" placeholder="执行结果" v-model="scope.row.result" :autosize="{minRows: 3, maxRows: 3}"></el-input>
+            <el-input type="textarea" placeholder="执行结果" v-model="scope.row.result"
+              :autosize="{ minRows: 3, maxRows: 3 }"></el-input>
           </template>
         </el-table-column>
       </el-table>
       <div style="text-align: center;margin-top: 30px;">
-        <el-pagination
-          background
-          layout="prev, pager, next, sizes, total, jumper"
-          :page-sizes="[5, 10, 15, 20]"
-          :page-size.sync="pagesize"
-          :current-page.sync="currpage"
-          :total="nodeServices.length"
-          @current-change="changePageIndex"
-          @size-change="changePageSize"
-        >
+        <el-pagination background layout="prev, pager, next, sizes, total, jumper" :page-sizes="[5, 10, 15, 20]"
+          :page-size.sync="pagesize" :current-page.sync="currpage" :total="nodeServices.length"
+          @current-change="changePageIndex" @size-change="changePageSize">
         </el-pagination>
       </div>
     </el-row>
 
     <el-row style="padding-top: 15px;padding-bottom: 15px;border-bottom: 1px solid white;">
       <el-col :md="24" :sm="24">
-        <el-input :autosize="{minRows: 10, maxRows: 10}" v-model="debugScript" type="textarea" placeholder="Please input script" min-width="50px"/>
+        <el-input :autosize="{ minRows: 10, maxRows: 10 }" v-model="debugScript" type="textarea"
+          placeholder="Please input script" min-width="50px" />
       </el-col>
     </el-row>
 
@@ -152,7 +128,7 @@ export default class extends Vue {
     this.nodeServices = this.curNodeServices
 
     this.websock = new WebSocket('ws://' + baseHost + '/api/debug_run')
-    this.websock.onmessage = async(event: any) => {
+    this.websock.onmessage = async (event: any) => {
       let text = await (new Response(event.data)).text()
       const msg = JSON.parse(text)
       for (let row of this.nodeServices) {

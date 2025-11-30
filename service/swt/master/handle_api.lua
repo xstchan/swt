@@ -1,13 +1,13 @@
-local skynet        = require "skynet"
-local websocket     = require "http.websocket"
+local skynet      = require "skynet"
+local websocket   = require "http.websocket"
 
-local global    = require "global"
-local json      = require "cjson"
-local http_helper   = require "swt.http_helper"
+local global      = require "global"
+local json        = require "cjson"
+local http_helper = require "swt.http_helper"
 
-local agent_mgr = global.agent_mgr
+local agent_mgr   = global.agent_mgr
 
-local apis = {}
+local apis        = {}
 
 -- luacheck: ignore request
 function apis.agent_list(request)
@@ -37,14 +37,34 @@ function apis.agent_services(request)
 end
 
 local function _debug_run(request, targets, script)
+    local function write_data_in_json(json_path, json_data)
+        local file = io.open(json_path, "w")
+        if file then
+            file:write(json_data)
+            file:close()
+        end
+    end
+
     local function response(target, type, msg)
         if request.socket_close then
             return
         end
-        websocket.write(request.id,
-            json.encode({node_id = target.node.addr, addr = target.addr, type = type, msg = msg}),
-            "binary"
-        )
+
+        skynet.fork(function()
+            local date = os.date("%Y-%m-%d-%H-%M-%S")
+            local data = json.encode({ node_id = target.node.addr, addr = target.addr, type = type, msg = msg, name =
+            target.name, date = date })
+            websocket.write(request.id,
+                data,
+                "binary"
+            )
+
+            if type == "print" then
+                local name = string.gsub(target.name, "%s", "_")
+                local filename = string.format("%s_%s.json", name, date)
+                write_data_in_json(filename, data)
+            end
+        end)
     end
 
     local wait_amount = 0
@@ -55,7 +75,7 @@ local function _debug_run(request, targets, script)
             script,
             target.addr,
             function(text, index, max)
-                response(target, "print", {text = text, index = index, max = max})
+                response(target, "print", { text = text, index = index, max = max })
             end
         )
 
@@ -131,7 +151,7 @@ return function(router)
     router:any("/api/:subcmd", function(request)
         local cmd = request.subcmd
         if not apis[cmd] then
-            http_helper.response(request.id, 404, {code = 20404, message = string.format("cmd:%s not found", cmd)})
+            http_helper.response(request.id, 404, { code = 20404, message = string.format("cmd:%s not found", cmd) })
             return
         end
 
@@ -145,13 +165,13 @@ return function(router)
         local ok, resp = xpcall(apis[cmd], debug.traceback, request)
         if not ok then
             http_helper.response(request.id,
-                    500,
-                    {code = 20500, message = string.format("cmd:%s server error:%s", cmd, resp)}
+                500,
+                { code = 20500, message = string.format("cmd:%s server error:%s", cmd, resp) }
             )
             return
         end
         if resp then
-            http_helper.response(request.id, 200, {code = 20000, message = "success", data = resp})
+            http_helper.response(request.id, 200, { code = 20000, message = "success", data = resp })
         end
     end)
 end
